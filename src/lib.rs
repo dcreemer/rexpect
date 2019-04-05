@@ -83,20 +83,20 @@ extern crate regex;
 extern crate tempfile;
 
 pub mod process;
-pub mod session;
 pub mod reader;
+pub mod session;
 
-pub use session::{spawn, spawn_bash, spawn_python};
 pub use reader::ReadUntil;
+pub use session::{spawn, spawn_bash, spawn_python};
 
 #[macro_use]
 extern crate error_chain;
 
 pub mod errors {
-    use std::time;
     use process::wait;
+    use std::time;
     // Create the Error, ErrorKind, ResultExt, and Result types
-    error_chain!{
+    error_chain! {
         errors {
             EOF(expected:String, got:String, exit_code:Option<wait::WaitStatus>) {
                 description("End of filestream (usually stdout) occurred, most probably\

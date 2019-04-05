@@ -1,14 +1,14 @@
 //! Main module of rexpect: start new process and interact with it
 
-use process::PtyProcess;
-use reader::{NBReader, Regex};
-pub use reader::ReadUntil;
-use std::fs::File;
-use std::io::LineWriter;
-use std::process::Command;
-use std::io::prelude::*;
-use std::ops::{Deref, DerefMut};
 use errors::*; // load error-chain
+use process::PtyProcess;
+pub use reader::ReadUntil;
+use reader::{NBReader, Regex};
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::LineWriter;
+use std::ops::{Deref, DerefMut};
+use std::process::Command;
 use tempfile;
 
 /// Interact with a process with read/write/signals, etc.
@@ -46,12 +46,12 @@ impl PtySession {
     /// returns number of written bytes
     pub fn send_line(&mut self, line: &str) -> Result<(usize)> {
         let mut len = self.send(line)?;
-        len += self.writer
+        len += self
+            .writer
             .write(&['\n' as u8])
             .chain_err(|| "cannot write newline")?;
         Ok(len)
     }
-
 
     /// Send string to process. As stdin of the process is most likely buffered, you'd
     /// need to call `flush()` after `send()` to make the process actually see your input.
@@ -138,7 +138,10 @@ impl PtySession {
     /// Note that `exp_regex("^foo")` matches the start of the yet consumed output.
     /// For matching the start of the line use `exp_regex("\nfoo")`
     pub fn exp_regex(&mut self, regex: &str) -> Result<(String, String)> {
-        let res = self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
+        let res = self
+            .exp(&ReadUntil::Regex(
+                Regex::new(regex).chain_err(|| "invalid regex")?,
+            ))
             .and_then(|s| Ok(s));
         res
     }
@@ -224,19 +227,18 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
 /// See `spawn`
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
-    let mut process = PtyProcess::new(command)
-        .chain_err(|| "couldn't start process")?;
+    let mut process = PtyProcess::new(command).chain_err(|| "couldn't start process")?;
     process.set_kill_timeout(timeout_ms);
 
     let f = process.get_file_handle();
     let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
     let reader = NBReader::new(f, timeout_ms);
     Ok(PtySession {
-           process: process,
-           writer: writer,
-           reader: reader,
-           commandname: commandname,
-       })
+        process: process,
+        writer: writer,
+        reader: reader,
+        commandname: commandname,
+    })
 }
 
 /// A repl session: e.g. bash or the python shell:
@@ -344,7 +346,6 @@ impl Drop for PtyReplSession {
     }
 }
 
-
 /// Spawn bash in a pty session, run programs and expect output
 ///
 ///
@@ -376,10 +377,20 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
     // would set as PS1 and we cannot know when is the right time
     // to set the new PS1
     let mut rcfile = tempfile::NamedTempFile::new().unwrap();
-    rcfile.write(b"PS1=\"~~~~\"\n\
-                   unset PROMPT_COMMAND\n").expect("cannot write to tmpfile");
+    rcfile
+        .write(
+            b"PS1=\"~~~~\"\n\
+                   unset PROMPT_COMMAND\n",
+        )
+        .expect("cannot write to tmpfile");
     let mut c = Command::new("bash");
-    c.args(&["--rcfile", rcfile.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);
+    c.args(&[
+        "--rcfile",
+        rcfile
+            .path()
+            .to_str()
+            .unwrap_or_else(|| return "temp file does not exist".into()),
+    ]);
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
         let mut pb = PtyReplSession {
@@ -389,7 +400,9 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
             echo_on: false,
         };
         pb.exp_string("~~~~")?;
-        rcfile.close().chain_err(|| "cannot delete temporary rcfile")?;
+        rcfile
+            .close()
+            .chain_err(|| "cannot delete temporary rcfile")?;
         pb.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
         // wait until the new prompt appears
         pb.wait_for_prompt()?;
@@ -421,15 +434,16 @@ mod tests {
             let mut s = spawn("cat", Some(1000))?;
             s.send_line("hans")?;
             assert_eq!("hans", s.read_line()?);
-            let should = ::process::wait::WaitStatus::Signaled(s.process.child_pid,
-                                                               ::process::signal::Signal::SIGTERM,
-                                                               false);
+            let should = ::process::wait::WaitStatus::Signaled(
+                s.process.child_pid,
+                ::process::signal::Signal::SIGTERM,
+                false,
+            );
             assert_eq!(should, s.process.exit()?);
             Ok(())
         }()
-                .unwrap_or_else(|e| panic!("test_read_line failed: {}", e));
+        .unwrap_or_else(|e| panic!("test_read_line failed: {}", e));
     }
-
 
     #[test]
     fn test_expect_eof_timeout() {
@@ -439,11 +453,10 @@ mod tests {
                 Ok(_) => assert!(false, "should raise Timeout"),
                 Err(Error(ErrorKind::Timeout(_, _, _), _)) => {}
                 Err(_) => assert!(false, "should raise TimeOut"),
-
             }
             Ok(())
         }()
-                .unwrap_or_else(|e| panic!("test_timeout failed: {}", e));
+        .unwrap_or_else(|e| panic!("test_timeout failed: {}", e));
     }
 
     #[test]
@@ -462,7 +475,7 @@ mod tests {
             p.exp_string("hello heaven!")?;
             Ok(())
         }()
-                .unwrap_or_else(|e| panic!("test_expect_string failed: {}", e));
+        .unwrap_or_else(|e| panic!("test_expect_string failed: {}", e));
     }
 
     #[test]
@@ -473,7 +486,7 @@ mod tests {
             assert_eq!("lorem ipsum dolor sit ", p.exp_string("amet")?);
             Ok(())
         }()
-                .unwrap_or_else(|e| panic!("test_read_string_before failed: {}", e));
+        .unwrap_or_else(|e| panic!("test_read_string_before failed: {}", e));
     }
 
     #[test]
@@ -481,13 +494,16 @@ mod tests {
         || -> Result<()> {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("Hi")?;
-            match p.exp_any(vec![ReadUntil::NBytes(3), ReadUntil::String("Hi".to_string())]) {
+            match p.exp_any(vec![
+                ReadUntil::NBytes(3),
+                ReadUntil::String("Hi".to_string()),
+            ]) {
                 Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
                 Err(e) => assert!(false, format!("got error: {}", e)),
             }
             Ok(())
         }()
-                .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
+        .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
     }
 
     #[test]
@@ -496,7 +512,8 @@ mod tests {
             let mut p = spawn_bash(Some(1000))?;
             p.execute("cat <(echo ready) -", "ready")?;
             Ok(())
-        }().unwrap_or_else(|e| panic!("test_kill_timeout failed: {}", e));;
+        }()
+        .unwrap_or_else(|e| panic!("test_kill_timeout failed: {}", e));;
         // p is dropped here and kill is sent immediatly to bash
         // Since that is not enough to make bash exit, a kill -9 is sent within 1s (timeout)
     }
@@ -511,7 +528,7 @@ mod tests {
             assert_eq!("/tmp\r\n", p.wait_for_prompt()?);
             Ok(())
         }()
-                .unwrap_or_else(|e| panic!("test_bash failed: {}", e));
+        .unwrap_or_else(|e| panic!("test_bash failed: {}", e));
     }
 
     #[test]
@@ -529,7 +546,7 @@ mod tests {
             p.send_control('c')?;
             Ok(())
         }()
-                .unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
+        .unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
     }
 
     #[test]
